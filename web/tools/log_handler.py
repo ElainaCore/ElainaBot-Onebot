@@ -9,7 +9,6 @@ framework_logs = deque(maxlen=MAX_LOGS)
 error_logs = deque(maxlen=MAX_LOGS)
 
 socketio = None
-PREFIX = '/web'
 
 LOG_DB_CONFIG = None
 add_log_to_db = None
@@ -77,7 +76,7 @@ class LogHandler:
                         (['traceback'] if 'traceback' in entry else [])
                     }
                 }
-                socketio.emit('new_message', emit_data, namespace=PREFIX)
+                socketio.emit('new_message', emit_data)
             except:
                 pass
         
@@ -109,7 +108,7 @@ def add_display_message(formatted_message, timestamp=None, user_id=None, group_i
     
     if socketio:
         try:
-            socketio.emit('new_message', {'type': 'received', 'data': entry}, namespace=PREFIX)
+            socketio.emit('new_message', {'type': 'received', 'data': entry})
         except:
             pass
     

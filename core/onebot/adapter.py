@@ -154,7 +154,10 @@ class OneBotV11Adapter:
                 return MetaEvent(**json_data)
             elif post_type == "notice":
                 notice_type = json_data.get("notice_type")
-                logger.info(f"🔔 收到通知事件: {notice_type} | 原始数据: {json_data}")
+                # 已适配的通知类型
+                adapted_notice_types = {"group_increase", "group_decrease", "group_recall", "group_admin", "group_ban", "group_upload", "notify", "friend_add", "friend_recall"}
+                if notice_type not in adapted_notice_types:
+                    logger.info(f"🔔 收到通知事件: {notice_type} | 原始数据: {json_data}")
                 if notice_type == "group_increase":
                     return GroupIncreaseNoticeEvent(**json_data)
                 elif notice_type == "group_decrease":

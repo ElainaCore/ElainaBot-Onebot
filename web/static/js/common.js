@@ -119,17 +119,6 @@ const pageLoadOptimizer = {
                     window.statisticsChart = null;
                 }
                 break;
-            case 'sandbox':
-                const sandboxResults = document.getElementById('sandbox-results');
-                if (sandboxResults) {
-                    sandboxResults.innerHTML = `
-                        <div class="empty-results text-center text-muted py-4">
-                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                            <p>尚未进行测试，请配置参数后点击"开始测试"</p>
-                        </div>
-                    `;
-                }
-                break;
         }
     }
 };
@@ -149,8 +138,8 @@ function initSocket(pageType = 'dashboard') {
     const protocol = currentUrl.protocol === 'https:' ? 'https' : 'http';
     const token = new URLSearchParams(window.location.search).get('token');
     
-    socket = io(`${protocol}://${host}:${port}${URL_PREFIX}`, {
-        path: "/web/socket.io",
+    socket = io(`${protocol}://${host}:${port}`, {
+        path: `${URL_PREFIX}/socket.io`,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         timeout: 20000,

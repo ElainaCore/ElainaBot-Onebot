@@ -18,11 +18,13 @@ def set_error_log_func(func):
 
 def get_websocket_status():
     try:
-        from function.ws_client import get_client
-        client = get_client("qq_bot")
-        return "连接成功" if (client and hasattr(client, 'connected') and client.connected) else "连接失败"
+        from core.onebot.adapter import get_adapter
+        adapter = get_adapter()
+        if adapter and adapter.bots:
+            return "连接成功"
+        return "等待连接"
     except:
-        return "连接失败"
+        return "未知"
 
 def get_cpu_model():
     cpu_model = "未知处理器"

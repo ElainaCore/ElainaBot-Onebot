@@ -1,358 +1,211 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from core.PluginManager import Plugin
-from core.MessageEvent import MessageSegment, Message
-from core.onebot.api import get_onebot_api, run_async_api
-import re
-import logging
+"""
+示例插件
+展示新架构的插件开发方式
+"""
 
-logger = logging.getLogger('ElainaBot.plugin.example')
+from core.plugin.base import BasePlugin
+from core.plugin.decorators import handler
+from core.message.builder import MessageBuilder, MessageSegment
+from core.decorators import safe_execute, timing
+from core.utils import truncate_string, format_timestamp
+from core.constants import PostTypes
 
 
-class ExamplePlugin(Plugin):
-    priority = 100
+class ExamplePlugin(BasePlugin):
+    """
+    示例插件类
+    展示标准的插件结构和API使用
+    """
+    
+    # 插件元信息
+    name = "示例插件"
+    description = "展示新架构的插件开发方式"
+    author = "ElainaBot"
+    version = "2.0.0"
+    
+    # 插件配置
+    priority = 10  # 优先级，数字越小越先执行
+    enabled = True
+    
+    @staticmethod
+    def get_regex_handlers():
+        """
+        返回正则处理器字典
+        
+        支持两种格式:
+        1. 简单格式: 'pattern': 'handler_name'
+        2. 完整格式: 'pattern': {'handler': 'name', 'owner_only': True, ...}
+        """
+        return {
+            # 简单格式
+            r'^示例帮助$': 'handle_help',
+            
+            # 完整格式
+            r'^示例测试\s*(.*)$': {
+                'handler': 'handle_test',
+                'owner_only': False,
+                'group_only': False,
+                'description': '测试命令，可带参数'
+            },
+            
+            # 仅主人可用
+            r'^示例管理$': {
+                'handler': 'handle_admin',
+                'owner_only': True,
+                'description': '管理员命令'
+            },
+            
+            # 仅群聊可用
+            r'^示例群聊$': {
+                'handler': 'handle_group_only',
+                'group_only': True,
+                'description': '仅群聊可用的命令'
+            },
+            
+            # 消息构建器示例
+            r'^示例消息$': {
+                'handler': 'handle_message_builder',
+                'description': '展示消息构建器用法'
+            }
+        }
+    
+    @classmethod
+    def on_plugin_load(cls):
+        """插件加载时调用"""
+        cls.log_info("插件已加载")
+    
+    @classmethod
+    def on_plugin_unload(cls):
+        """插件卸载时调用"""
+        cls.log_info("插件已卸载")
+    
+    @classmethod
+    def on_event(cls, event):
+        """
+        事件钩子，所有事件都会调用
+        可用于处理通知、请求等非消息事件
+        """
+        # 处理通知事件
+        if event.post_type == PostTypes.NOTICE:
+            notice_type = getattr(event, 'notice_type', '')
+            if notice_type == 'group_increase':
+                # 新成员入群
+                cls.log_info(f"新成员 {event.user_id} 加入群 {event.group_id}")
+        
+        # 返回 None 继续传递事件
+        return None
+    
+    # ==================== 处理器方法 ====================
+    
+    @staticmethod
+    def handle_help(event):
+        """帮助命令处理器"""
+        help_text = """📚 示例插件帮助
+
+命令列表:
+• 示例帮助 - 显示此帮助
+• 示例测试 [参数] - 测试命令
+• 示例管理 - 管理员命令（仅主人）
+• 示例群聊 - 群聊命令（仅群聊）
+• 示例消息 - 消息构建器示例
+
+插件版本: 2.0.0"""
+        
+        event.reply(help_text)
+        return True
+    
+    @staticmethod
+    @timing(threshold_ms=100)  # 记录执行时间超过100ms的调用
+    def handle_test(event):
+        """测试命令处理器"""
+        # 获取正则匹配的参数
+        param = event.matches[0] if event.matches else ""
+        
+        if param:
+            reply = f"✅ 测试成功！\n参数: {truncate_string(param, 50)}"
+        else:
+            reply = "✅ 测试成功！（无参数）"
+        
+        # 添加时间戳
+        reply += f"\n时间: {format_timestamp()}"
+        
+        event.reply(reply)
+        return True
+    
+    @staticmethod
+    def handle_admin(event):
+        """管理员命令处理器（仅主人可用）"""
+        event.reply("🔐 这是管理员命令，只有主人可以使用")
+        return True
+    
+    @staticmethod
+    def handle_group_only(event):
+        """群聊命令处理器（仅群聊可用）"""
+        event.reply(f"👥 这是群聊命令\n当前群: {event.group_id}")
+        return True
+    
+    @staticmethod
+    @safe_execute("消息构建失败: {error}", default_return=False)
+    def handle_message_builder(event):
+        """消息构建器示例"""
+        # 使用链式调用构建消息
+        msg = (MessageBuilder()
+            .text("📝 消息构建器示例\n\n")
+            .text("1. 文本消息\n")
+            .text("2. ")
+            .at(event.user_id)
+            .text(" @用户\n")
+            .text("3. 表情: ")
+            .face(1)
+            .newline()
+            .text("\n✨ 构建完成！"))
+        
+        # 发送构建的消息
+        event.reply(msg.build())
+        return True
+
+
+class AdvancedExamplePlugin(BasePlugin):
+    """
+    高级示例插件
+    展示更多高级功能
+    """
+    
+    name = "高级示例"
+    description = "展示高级插件功能"
+    priority = 20
+    
+    # 插件状态
+    _counter = 0
     
     @staticmethod
     def get_regex_handlers():
         return {
-            r'^(帮助|help|菜单)$': {'handler': 'run', 'master_only': True},
-            r'^ping$': 'run',
-            r'^我的信息$': {'handler': 'run', 'master_only': True},
-            r'^群信息$': {'handler': 'run', 'group_only': True, 'master_only': True},
-            r'^群成员$': {'handler': 'run', 'group_only': True, 'master_only': True},
-            r'^好友列表$': {'handler': 'run', 'master_only': True},
-            r'^群列表$': {'handler': 'run', 'master_only': True},
-            r'^禁言\s*(\d+)\s*(\d+)?$': {'handler': 'run', 'group_only': True, 'master_only': True},
-            r'^改名片\s+(\d+)\s+(.+)$': {'handler': 'run', 'group_only': True, 'master_only': True},
-            r'^测试撤回$': {'handler': 'run', 'master_only': True},
-            r'^测试消息段$': {'handler': 'run', 'master_only': True},
-            r'^测试文本$': {'handler': 'run', 'master_only': True},
-            r'^测试at$': {'handler': 'run', 'master_only': True},
-            r'^测试at全体$': {'handler': 'run', 'group_only': True, 'master_only': True},
-            r'^测试表情$': {'handler': 'run', 'master_only': True},
-            r'^测试图片$': {'handler': 'run', 'master_only': True},
-            r'^测试回复$': {'handler': 'run', 'master_only': True},
-            r'^测试组合$': {'handler': 'run', 'master_only': True},
+            r'^计数器$': {
+                'handler': 'handle_counter',
+                'description': '显示并增加计数器'
+            },
+            r'^重置计数器$': {
+                'handler': 'handle_reset',
+                'owner_only': True,
+                'description': '重置计数器'
+            }
         }
     
     @classmethod
-    def run(cls, event):
-        content = event.content.strip()
-        
-        if content in ['帮助', 'help', '菜单']:
-            cls.show_help(event)
-            return True
-        
-        if content == 'ping':
-            event.reply('pong! 🏓')
-            return True
-        
-        if content == '我的信息':
-            cls.get_my_info(event)
-            return True
-        
-        if content == '群信息' and event.is_group:
-            cls.get_group_info(event)
-            return True
-        
-        if content == '群成员' and event.is_group:
-            cls.get_group_members(event)
-            return True
-        
-        ban_match = re.match(r'^禁言\s*(\d+)\s*(\d+)?$', content)
-        if ban_match and event.is_group:
-            cls.ban_user(event, ban_match)
-            return True
-        
-        card_match = re.match(r'^改名片\s+(\d+)\s+(.+)$', content)
-        if card_match and event.is_group:
-            cls.set_card(event, card_match)
-            return True
-        
-        if content == '测试撤回':
-            event.reply('这条消息将在3秒后撤回', auto_delete_time=3)
-            return True
-        
-        if content == '好友列表':
-            cls.get_friend_list(event)
-            return True
-        
-        if content == '群列表':
-            cls.get_group_list(event)
-            return True
-        
-        if content == '测试消息段':
-            cls.show_message_segment_menu(event)
-            return True
-        
-        if content == '测试文本':
-            cls.test_text(event)
-            return True
-        
-        if content == '测试at':
-            cls.test_at(event)
-            return True
-        
-        if content == '测试at全体' and event.is_group:
-            cls.test_at_all(event)
-            return True
-        
-        if content == '测试表情':
-            cls.test_face(event)
-            return True
-        
-        if content == '测试图片':
-            cls.test_image(event)
-            return True
-        
-        if content == '测试回复':
-            cls.test_reply(event)
-            return True
-        
-        if content == '测试组合':
-            cls.test_combined(event)
-            return True
-        
-        return False
+    def handle_counter(cls, event):
+        """计数器处理器"""
+        cls._counter += 1
+        event.reply(f"🔢 当前计数: {cls._counter}")
+        return True
     
     @classmethod
-    def show_help(cls, event):
-        help_text = """
-🤖 OneBot 示例插件（仅主人可用）
-
-📌 基础：
-• ping - 测试响应（所有人可用）
-• 帮助/help/菜单
-
-📊 查询：
-• 我的信息 - 获取你的信息
-• 群信息 - 当前群信息（群聊）
-• 群成员 - 群成员列表（群聊）
-• 好友列表 - 获取好友列表
-• 群列表 - 获取群列表
-
-⚙️ 管理：
-• 禁言 <QQ号> <秒数>（群聊）
-• 改名片 <QQ号> <名片>（群聊）
-
-🧪 测试：
-• 测试撤回 - 3秒后自动撤回
-• 测试消息段 - 查看消息段测试菜单
-• 测试文本/at/表情/图片/回复/组合
-        """.strip()
-        event.reply(help_text)
-    
-    @classmethod
-    def show_message_segment_menu(cls, event):
-        """显示消息段测试菜单"""
-        menu = """
-🧪 消息段测试菜单
-
-发送以下指令测试不同类型的消息：
-
-• 测试文本 - 纯文本消息
-• 测试at - @消息
-• 测试at全体 - @全体成员（群聊）
-• 测试表情 - QQ表情
-• 测试图片 - 图片消息
-• 测试回复 - 回复消息
-• 测试组合 - 组合多种消息段
-        """.strip()
-        event.reply(menu)
-    
-    @classmethod
-    def test_text(cls, event):
-        """测试纯文本消息"""
-        msg = Message([MessageSegment.text("这是一条纯文本消息！✅")])
-        event.reply(msg)
-    
-    @classmethod
-    def test_at(cls, event):
-        """测试@消息"""
-        msg = Message([
-            MessageSegment.at(event.user_id),
-            MessageSegment.text(" 这是@你的消息！")
-        ])
-        event.reply(msg)
-    
-    @classmethod
-    def test_at_all(cls, event):
-        """测试@全体成员"""
-        msg = Message([
-            MessageSegment.at_all(),
-            MessageSegment.text(" 这是@全体成员的消息！")
-        ])
-        event.reply(msg)
-    
-    @classmethod
-    def test_face(cls, event):
-        """测试QQ表情"""
-        msg = Message([
-            MessageSegment.text("QQ表情演示："),
-            MessageSegment.face(1),   # 微笑
-            MessageSegment.face(2),   # 撇嘴
-            MessageSegment.face(14),  # 微笑
-            MessageSegment.face(21),  # 可爱
-            MessageSegment.face(66),  # 爱心
-        ])
-        event.reply(msg)
-    
-    @classmethod
-    def test_image(cls, event):
-        """测试图片消息"""
-        msg = Message([
-            MessageSegment.text("这是一张图片：\n"),
-            MessageSegment.image("https://q1.qlogo.cn/g?b=qq&nk=10001&s=640")
-        ])
-        event.reply(msg)
-    
-    @classmethod
-    def test_reply(cls, event):
-        """测试回复消息"""
-        msg = Message([
-            MessageSegment.reply(event.message_id),
-            MessageSegment.text("这是一条回复消息！")
-        ])
-        event.reply(msg)
-    
-    @classmethod
-    def test_combined(cls, event):
-        """测试组合消息"""
-        msg = Message([
-            MessageSegment.text("组合消息示例："),
-            MessageSegment.at(event.user_id),
-            MessageSegment.text(" 你好！"),
-            MessageSegment.face(21),  # 可爱
-            MessageSegment.text("\n下面是一张图片：\n"),
-            MessageSegment.image("https://q1.qlogo.cn/g?b=qq&nk=10001&s=100")
-        ])
-        event.reply(msg)
-    
-    @classmethod
-    def get_my_info(cls, event):
-        api = get_onebot_api()
-        try:
-            result = run_async_api(api.get_stranger_info(event.user_id))
-            if result and result.get('retcode') == 0:
-                data = result.get('data', {})
-                info = f"""👤 你的信息：
-• QQ号：{data.get('user_id', event.user_id)}
-• 昵称：{data.get('nickname', '未知')}
-• 年龄：{data.get('age', '未知')}
-• 性别：{data.get('sex', '未知')}"""
-                event.reply(info)
-            else:
-                event.reply('❌ 获取信息失败')
-        except Exception as e:
-            logger.error(f"获取用户信息失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
-    
-    @classmethod
-    def get_group_info(cls, event):
-        api = get_onebot_api()
-        try:
-            result = run_async_api(api.get_group_info(event.group_id))
-            if result and result.get('retcode') == 0:
-                data = result.get('data', {})
-                info = f"""👥 群信息：
-• 群号：{data.get('group_id', event.group_id)}
-• 群名：{data.get('group_name', '未知')}
-• 成员数：{data.get('member_count', '未知')}
-• 最大人数：{data.get('max_member_count', '未知')}"""
-                event.reply(info)
-            else:
-                event.reply('❌ 获取群信息失败')
-        except Exception as e:
-            logger.error(f"获取群信息失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
-    
-    @classmethod
-    def get_group_members(cls, event):
-        api = get_onebot_api()
-        try:
-            members = run_async_api(api.get_group_member_list(event.group_id))
-            if members:
-                count = len(members)
-                preview = members[:10]
-                member_list = '\n'.join([
-                    f"• {m.get('nickname', '未知')} ({m.get('user_id', '')})"
-                    for m in preview
-                ])
-                text = f"👥 群成员列表（共{count}人）：\n\n{member_list}\n\n{'...' if count > 10 else ''}"
-                event.reply(text)
-            else:
-                event.reply('❌ 获取群成员列表失败')
-        except Exception as e:
-            logger.error(f"获取群成员列表失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
-    
-    @classmethod
-    def ban_user(cls, event, match):
-        api = get_onebot_api()
-        user_id = match.group(1)
-        duration = int(match.group(2)) if match.group(2) else 60
-        try:
-            result = run_async_api(api.set_group_ban(event.group_id, user_id, duration))
-            if result and result.get('retcode') == 0:
-                event.reply(f'✅ 已禁言用户 {user_id}，时长 {duration} 秒')
-            else:
-                event.reply('❌ 禁言失败，可能权限不足')
-        except Exception as e:
-            logger.error(f"禁言失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
-    
-    @classmethod
-    def set_card(cls, event, match):
-        api = get_onebot_api()
-        user_id = match.group(1)
-        card = match.group(2)
-        try:
-            result = run_async_api(api.set_group_card(event.group_id, user_id, card))
-            if result and result.get('retcode') == 0:
-                event.reply(f'✅ 已将用户 {user_id} 的群名片修改为：{card}')
-            else:
-                event.reply('❌ 修改失败，可能权限不足')
-        except Exception as e:
-            logger.error(f"设置群名片失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
-    
-    @classmethod
-    def get_friend_list(cls, event):
-        api = get_onebot_api()
-        try:
-            friends = run_async_api(api.get_friend_list())
-            if friends:
-                count = len(friends)
-                preview = friends[:10]
-                friend_list = '\n'.join([
-                    f"• {f.get('nickname', '未知')} ({f.get('user_id', '')})"
-                    for f in preview
-                ])
-                text = f"👥 好友列表（共{count}人）：\n\n{friend_list}\n\n{'...' if count > 10 else ''}"
-                event.reply(text)
-            else:
-                event.reply('❌ 获取好友列表失败')
-        except Exception as e:
-            logger.error(f"获取好友列表失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
-    
-    @classmethod
-    def get_group_list(cls, event):
-        api = get_onebot_api()
-        try:
-            groups = run_async_api(api.get_group_list())
-            if groups:
-                count = len(groups)
-                preview = groups[:10]
-                group_list = '\n'.join([
-                    f"• {g.get('group_name', '未知')} ({g.get('group_id', '')})"
-                    for g in preview
-                ])
-                text = f"👥 群列表（共{count}个群）：\n\n{group_list}\n\n{'...' if count > 10 else ''}"
-                event.reply(text)
-            else:
-                event.reply('❌ 获取群列表失败')
-        except Exception as e:
-            logger.error(f"获取群列表失败: {e}")
-            event.reply(f'❌ 错误：{str(e)}')
+    def handle_reset(cls, event):
+        """重置计数器"""
+        old_value = cls._counter
+        cls._counter = 0
+        event.reply(f"🔄 计数器已重置\n原值: {old_value} → 0")
+        return True

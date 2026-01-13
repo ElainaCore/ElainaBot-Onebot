@@ -468,7 +468,7 @@ def scan_plugins():
 
 @catch_error
 def register_socketio_handlers(sio):
-    @sio.on('connect', namespace=PREFIX)
+    @sio.on('connect')
     @require_socketio_token
     def handle_connect():
         sid = request.sid
@@ -477,14 +477,14 @@ def register_socketio_handlers(sio):
             system_info = get_system_info()
             
             try:
-                sio.emit('system_info', system_info, room=sid, namespace=PREFIX)
+                sio.emit('system_info', system_info, room=sid)
             except Exception:
                 pass
                 
             plugins = scan_plugins()
             
             try:
-                sio.emit('plugins_update', plugins, room=sid, namespace=PREFIX)
+                sio.emit('plugins_update', plugins, room=sid)
                 
                 logs_data = {
                     'received': {
@@ -517,30 +517,30 @@ def register_socketio_handlers(sio):
                     if 'logs' in logs_data[log_type]:
                         logs_data[log_type]['logs'].reverse()
                 
-                sio.emit('logs_batch', logs_data, room=sid, namespace=PREFIX)
+                sio.emit('logs_batch', logs_data, room=sid)
             except Exception:
                 pass
         
         threading.Thread(target=async_load_initial_data, daemon=True).start()
 
-    @sio.on('disconnect', namespace=PREFIX)
+    @sio.on('disconnect')
     def handle_disconnect():
         pass
 
-    @sio.on('get_system_info', namespace=PREFIX)
+    @sio.on('get_system_info')
     @require_socketio_token
     def handle_get_system_info():
         system_info = get_system_info()
         
-        sio.emit('system_info', system_info, room=request.sid, namespace=PREFIX)
+        sio.emit('system_info', system_info, room=request.sid)
 
-    @sio.on('get_plugins_info', namespace=PREFIX)
+    @sio.on('get_plugins_info')
     @require_socketio_token
     def handle_get_plugins_info():
         plugins = scan_plugins()
-        sio.emit('plugins_update', plugins, room=request.sid, namespace=PREFIX)
+        sio.emit('plugins_update', plugins, room=request.sid)
 
-    @sio.on('request_logs', namespace=PREFIX)
+    @sio.on('request_logs')
     @require_socketio_token  
     def handle_request_logs(data):
         log_type = data.get('type', 'received')
@@ -567,7 +567,7 @@ def register_socketio_handlers(sio):
             'total': len(logs),
             'page': page,
             'page_size': page_size
-        }, room=request.sid, namespace=PREFIX)
+        }, room=request.sid)
 
 def start_web(main_app=None, is_subprocess=False):
     global socketio
@@ -578,11 +578,11 @@ def start_web(main_app=None, is_subprocess=False):
         try:
             socketio = SocketIO(app, 
                             cors_allowed_origins="*",
-                            path="/socket.io",
+                            path=f"{PREFIX}/socket.io",
                             async_mode='threading',
                             logger=False,
                             engineio_logger=False,
-                            engineio_options={'transports': ['polling']})
+                            engineio_options={'transports': ['polling', 'websocket']})
             log_handler.set_socketio(socketio)
             register_socketio_handlers(socketio)
         except Exception as e:
@@ -610,11 +610,11 @@ def start_web(main_app=None, is_subprocess=False):
             else:
                 socketio = SocketIO(main_app, 
                                 cors_allowed_origins="*",
-                                path="/socket.io",
+                                path=f"{PREFIX}/socket.io",
                                 async_mode='threading',
                                 logger=False,
                                 engineio_logger=False,
-                                engineio_options={'transports': ['polling']})
+                                engineio_options={'transports': ['polling', 'websocket']})
                 main_app.socketio = socketio
             log_handler.set_socketio(socketio)
             register_socketio_handlers(socketio)

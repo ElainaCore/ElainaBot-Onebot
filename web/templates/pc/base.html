@@ -20,30 +20,64 @@
     </script>
     
     <link rel="stylesheet" href="{{ url_for('web.static', filename='css/common.css') }}">
+    
+    <!-- 动态主题色 -->
+    <style>
+        :root {
+            --theme-gradient: {{ web_interface.theme_gradient or 'linear-gradient(135deg, #5865F2, #7289DA)' }};
+            --theme-primary: #5865F2;
+            --theme-primary-hover: #4752c4;
+        }
+        .page-header {
+            background: var(--theme-gradient) !important;
+        }
+        .robot-info-card {
+            background: var(--theme-gradient) !important;
+        }
+        .sidebar-item.active {
+            background: var(--theme-gradient) !important;
+        }
+        .nav-tabs .nav-link.active {
+            background: var(--theme-gradient) !important;
+        }
+        .info-card-header {
+            background: var(--theme-gradient) !important;
+        }
+        .directory-title.expanded {
+            background: var(--theme-gradient) !important;
+        }
+        .btn-control:hover {
+            background: var(--theme-gradient) !important;
+        }
+    </style>
     {% block extra_styles %}{% endblock %}
 </head>
 <body>
     <div class="page-header">
         <div class="container-fluid">
-            <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center;">
-                <button class="toggle-sidebar" id="toggle-sidebar" style="position: absolute; left: 15px;" aria-label="切换菜单">
-                    <i class="bi bi-list"></i>
-                </button>
+            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button class="toggle-sidebar" id="toggle-sidebar" aria-label="切换菜单">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <h1 class="page-title">
+                        <i class="bi bi-robot"></i>
+                        <span class="title-text">{{ web_interface.framework_name }}</span>
+                    </h1>
+                </div>
                 
-                <h1 class="page-title d-flex align-items-center mb-0" style="position: absolute; left: 10%; transform: translateX(0);">
-                    <i class="bi bi-laptop me-2"></i>
-                    <span class="title-text">{{ web_interface.framework_name }}{{ web_interface.pc_title_suffix }}</span>
-                </h1>
-                
-                <div class="d-flex align-items-center header-actions" style="margin-left: auto;">
-                    <div class="me-3 connection-indicator-wrapper">
+                <div class="header-actions">
+                    <div class="connection-indicator-wrapper">
                         <span class="connection-status disconnected" id="connection-indicator"></span>
-                        <span class="text-light connection-text" id="connection-text">未连接</span>
+                        <span class="connection-text" id="connection-text">未连接</span>
                     </div>
-
-                    <span class="text-light me-3 time-display"><i class="bi bi-clock"></i> <span id="current-time"></span></span>
-                    <button class="btn btn-sm btn-outline-danger restart-btn" onclick="restartBot()" id="restart-btn">
-                        <i class="bi bi-power"></i> <span class="btn-text">重启</span>
+                    <div class="time-display">
+                        <i class="bi bi-clock"></i>
+                        <span id="current-time"></span>
+                    </div>
+                    <button class="restart-btn" onclick="restartBot()" id="restart-btn">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        <span class="btn-text">重启</span>
                     </button>
                 </div>
             </div>
@@ -66,10 +100,6 @@
                     <i class="bi bi-grid"></i>
                     <span class="item-text">插件列表</span>
                 </a>
-                <a class="sidebar-item" href="?token={{ current_token }}&page=sandbox" data-page="sandbox">
-                    <i class="bi bi-play-circle"></i>
-                    <span class="item-text">沙盒测试</span>
-                </a>
                 <a class="sidebar-item" href="?token={{ current_token }}&page=message" data-page="message">
                     <i class="bi bi-chat-dots"></i>
                     <span class="item-text">消息发送</span>
@@ -78,13 +108,6 @@
                     <i class="bi bi-gear-fill"></i>
                     <span class="item-text">配置管理</span>
                 </a>
-                <a class="sidebar-item" href="?token={{ current_token }}&page=changelog" data-page="changelog">
-                    <i class="bi bi-clock-history"></i>
-                    <span class="item-text">更新日志</span>
-                </a>
-                
-                <!-- 调试信息 -->
-                <!-- Plugin routes: {{ plugin_routes|length if plugin_routes else 'None' }} -->
                 
                 {% if plugin_routes and plugin_routes|length > 0 %}
                 <div class="sidebar-divider"></div>
@@ -114,6 +137,18 @@
     <script src="{{ url_for('web.static', filename='js/vendor/chart.min.js') }}"></script>
     <script src="{{ url_for('web.static', filename='js/vendor/chartjs-plugin-datalabels.min.js') }}"></script>
     <script src="{{ url_for('web.static', filename='js/common.js') }}"></script>
+    <script>
+        console.log(`%c
+  _____ _       _             
+ | ____| | __ _(_)_ __   __ _ 
+ |  _| | |/ _\` | | '_ \\ / _\` |
+ | |___| | (_| | | | | | (_| |
+ |_____|_|\\__,_|_|_| |_|\\__,_|
+                              
+  OneBot Framework
+  Powered by Elaina-OneBot
+`, 'color: #5865F2; font-family: monospace;');
+    </script>
     {% block scripts %}{% endblock %}
     
     <script>
@@ -126,7 +161,6 @@
             sidebarItems.forEach(item => {
                 item.classList.remove('active');
                 
-                // 检查插件页面
                 if (page === 'plugin' && item.dataset.page === 'plugin' && item.dataset.plugin === pluginPath) {
                     item.classList.add('active');
                 } else if (item.dataset.page === page && page !== 'plugin') {
@@ -145,18 +179,15 @@
                 window.pageLoadOptimizer.currentPage = currentPage;
             }
             
-            // 加载插件页面
             if (page === 'plugin' && pluginPath) {
                 loadPluginPage(pluginPath);
             }
         });
         
-        // 加载插件页面的函数
         async function loadPluginPage(pluginPath) {
             const container = document.getElementById('main-content');
             if (!container) return;
             
-            // 显示加载中
             container.innerHTML = `
                 <div class="plugin-page-container">
                     <div class="plugin-page-loading">
@@ -183,7 +214,6 @@
                     throw new Error(data.error || '未知错误');
                 }
                 
-                // 渲染插件页面
                 container.innerHTML = `
                     <div class="plugin-page-container">
                         <div class="mb-3">
@@ -194,7 +224,6 @@
                     </div>
                 `;
                 
-                // 如果有自定义CSS，添加到页面
                 if (data.css) {
                     const styleEl = document.createElement('style');
                     styleEl.id = 'plugin-custom-css';
@@ -202,7 +231,6 @@
                     document.head.appendChild(styleEl);
                 }
                 
-                // 如果有自定义JavaScript，执行
                 if (data.script) {
                     const scriptEl = document.createElement('script');
                     scriptEl.textContent = data.script;
@@ -258,7 +286,7 @@
                 console.error('重启失败:', error);
                 restartBtn.disabled = false;
                 restartBtn.innerHTML = originalText;
-                restartBtn.className = 'btn btn-outline-danger btn-sm';
+                restartBtn.className = 'restart-btn';
                 showToast('重启失败: ' + error.message, 'error');
             }
         }
@@ -283,7 +311,7 @@
             statusCard.style.cssText = `
                 background: white;
                 padding: 30px;
-                border-radius: 10px;
+                border-radius: 12px;
                 text-align: center;
                 max-width: 400px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
