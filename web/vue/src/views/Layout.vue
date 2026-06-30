@@ -276,7 +276,7 @@ onUnmounted(() => {
 
         <div class="topbar-right">
           <!-- GitHub -->
-          <a href="https://github.com/ElainaCore/ElainaBot_v2" target="_blank" rel="noopener"
+          <a href="https://github.com/ElainaCore/ElainaBot-Onebot" target="_blank" rel="noopener"
             title="GitHub" class="github-link">
             <SvgIcon name="github" :size="18" />
           </a>
