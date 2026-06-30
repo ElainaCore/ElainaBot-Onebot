@@ -48,6 +48,7 @@ class _DispatchMixin:
 
         # 消息事件 — 仅遍历消息桶 (event 必为 MessageEvent, 直取属性)
         if post_type == 'message':
+            matched = []
             for h in self._msg_handlers:
                 if h['group_only'] and not event.is_group:
                     continue
@@ -64,9 +65,13 @@ class _DispatchMixin:
                     if now - self._cooldowns.get(key, 0) < h['cooldown']:
                         continue
                     self._cooldowns[key] = now
-                # 异步执行
-                asyncio.create_task(self._run_handler(h, event, m))
-                return True
+                matched.append((h, m))
+                if h.get('block', False):  # 默认放行, block=True 时拦截后续
+                    break
+            if not matched:
+                return False
+            asyncio.create_task(self._run_chain(matched, event))
+            return True
 
         # 通知/请求/元事件 — 候选 = 通用桶 + 该事件类型桶, 按优先级合并
         else:
@@ -82,15 +87,24 @@ class _DispatchMixin:
             else:
                 candidates = typed or self._generic_handlers
 
+            matched = []
             for h in candidates:
                 # 对非消息事件也尝试正则匹配 (pattern='.*' 可匹配所有)
                 m = h['compiled'].search(content or event_type)
                 if not m:
                     continue
-                asyncio.create_task(self._run_handler(h, event, m))
-                return True
+                matched.append((h, m))
+                if h.get('block', False):  # 默认放行, block=True 时拦截后续
+                    break
+            if not matched:
+                return False
+            asyncio.create_task(self._run_chain(matched, event))
+            return True
 
-        return False
+    async def _run_chain(self, matched, event):
+        """顺序执行命中的处理器链 (回复顺序与 priority 一致)"""
+        for h, match in matched:
+            await self._run_handler(h, event, match)
 
     async def _run_handler(self, h, event, match):
         """执行单个处理器 (带超时和异常捕获)"""

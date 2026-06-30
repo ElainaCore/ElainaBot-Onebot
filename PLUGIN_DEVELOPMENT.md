@@ -96,7 +96,7 @@ from core.plugin.decorators import handler, on_load, on_unload, interceptor
 ```python
 @handler(pattern, *, name='', desc='', priority=0,
          owner_only=False, group_only=False, private_only=False,
-         event_types=None, cooldown=0)
+         event_types=None, cooldown=0, block=False)
 ```
 
 | 参数 | 类型 | 默认 | 说明 |
@@ -104,12 +104,13 @@ from core.plugin.decorators import handler, on_load, on_unload, interceptor
 | `pattern` | `str` | — | 正则表达式 (使用 `re.DOTALL` 编译, 对消息文本做 `search`) |
 | `name` | `str` | 函数名 | 处理器显示名称 (Web 面板 / 日志) |
 | `desc` | `str` | `''` | 功能描述 |
-| `priority` | `int` | `0` | 优先级 (数字越大越先匹配, 命中即停止) |
+| `priority` | `int` | `0` | 优先级 (数字越大越先匹配) |
 | `owner_only` | `bool` | `False` | 仅主人可触发 (主人 QQ 配置于 `settings.yaml` 的 `owner.ids`) |
 | `group_only` | `bool` | `False` | 仅群聊 |
 | `private_only` | `bool` | `False` | 仅私聊 |
 | `event_types` | `list[str]` | `None` | 仅响应指定事件类型 (见下表) |
 | `cooldown` | `int` | `0` | 同一用户冷却时间 (秒, 0 = 无冷却) |
+| `block` | `bool` | `False` | 命中后是否拦截后续处理器 (见 3.1.1) |
 
 **事件类型常量** (`event_types` 可选值)：
 
@@ -141,6 +142,21 @@ async def welcome(event, match):
     await event.call_api('send_group_msg', {
         'group_id': event.group_id,
         'message': f"欢迎新成员 {event.user_id}!"})
+```
+
+#### 3.1.1 `block` 放行 / 拦截
+
+多个插件注册相同指令时, `block=False` (默认) 放行让所有命中处理器按 `priority` 顺序执行, `block=True` 命中即拦截后续低优先级处理器。
+
+```python
+@handler(r'^状态$', name='系统状态', priority=10, block=True)  # 命中即拦截, 只有它响应
+async def status(event, match):
+    await event.reply("✅ 系统正常")
+
+
+@handler(r'^状态$', name='天气状态', priority=0)  # 被上面 block 拦截, 不会触发
+async def weather(event, match):
+    await event.reply("☀️ 今天晴")
 ```
 
 ### 3.2 `@on_load` / `@on_unload` 生命周期钩子
