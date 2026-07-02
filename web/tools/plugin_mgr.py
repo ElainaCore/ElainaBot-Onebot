@@ -168,10 +168,26 @@ def _scan_plugin_dirs():
         if not files:
             continue
 
-        persist_disabled = dir_name in disabled_set
+        # 持久化禁用状态: 目录级 或 入口文件级 (入口文件禁用 = 整体禁用)
+        entry_path = find_entry(dir_path)
+        entry_key = f'{dir_name}/{os.path.basename(entry_path)[:-3]}' if entry_path else ''
+        persist_disabled = dir_name in disabled_set or (entry_key and entry_key in disabled_set)
+
+        # 标记文件级别的 enabled
         for f in files:
-            if persist_disabled:
+            stem = f['name'][:-3] if f['name'].endswith('.py') else f['name']
+            if persist_disabled or f'{dir_name}/{stem}' in disabled_set:
                 f['enabled'] = False
+
+        if has_entry:
+            app_dir = os.path.join(dir_path, 'app')
+            if os.path.isdir(app_dir):
+                sub_files = _scan_py_files(app_dir, prefix='app/')
+                for f in sub_files:
+                    stem = f['name'][:-3] if f['name'].endswith('.py') else f['name']
+                    if persist_disabled or f'{dir_name}/{stem}' in disabled_set:
+                        f['enabled'] = False
+                files.extend(sub_files)
 
         loaded = dir_name in (pm.plugins if pm else {})
         dirs.append({
@@ -214,16 +230,19 @@ async def handle_toggle_plugin(request: web.Request):
 
     key = f'{name}/{file}' if file else name
     try:
-        if action == 'enable':
-            pm.enable_plugin(key)
-            if name not in pm.plugins:
+        (pm.enable_plugin if action == 'enable' else pm.disable_plugin)(key)
+        # 入口文件/目录级: 需加载/卸载整个插件; 子文件: 重载目录即可
+        is_entry = not file or f'{file}.py' in ('main.py', 'index.py', 'app.py') or file == name
+        if is_entry:
+            if action == 'enable' and name not in pm.plugins:
                 await pm.reload(name)
-        else:
-            pm.disable_plugin(key)
-            if name in pm.plugins:
+            elif action == 'disable' and name in pm.plugins:
                 await pm.unload(name)
+        else:
+            if name in pm.plugins:
+                await pm.reload(name)
         label = '已启用' if action == 'enable' else '已禁用'
-        return web.json_response({'success': True, 'message': f'{name} {label}', 'plugin_name': name})
+        return web.json_response({'success': True, 'message': f'{key} {label}', 'plugin_name': name})
     except Exception as e:
         log.error(f'插件 {action} [{key}] 失败: {e}')
         return web.json_response({'success': False, 'message': f'操作异常: {e}'}, status=500)
