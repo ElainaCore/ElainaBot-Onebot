@@ -46,6 +46,14 @@ async def _run_hooks(funcs, name):
             report_error(PLUGIN, name, e)
 
 
+def _sub_key(func, plugin_name, prefix):
+    """从 handler 函数的 __module__ 提取子模块禁用 key (如 system/app/stats)"""
+    mod = getattr(func, '__module__', '') or ''
+    if mod.startswith(prefix):
+        return f'{plugin_name}/{mod[len(prefix):].replace(".", "/")}'
+    return ''
+
+
 def _read_plugin_meta(module):
     if module is None:
         return {}
@@ -71,11 +79,13 @@ class _LoaderMixin:
         loaded = skipped = large = 0
         for name in dirs:
             try:
-                if name in self._disabled_plugins:
+                entry = self._find_large_entry(os.path.join(self._dir, name))
+                # 禁用检查: 目录级 or 入口文件级
+                entry_key = f'{name}/{os.path.basename(entry)[:-3]}' if entry else ''
+                if name in self._disabled_plugins or (entry_key and entry_key in self._disabled_plugins):
                     log.info(f'插件 [{name}] 已禁用, 跳过')
                     skipped += 1
                     continue
-                entry = self._find_large_entry(os.path.join(self._dir, name))
                 if entry:
                     await self._load_large(name)
                     large += 1
@@ -96,6 +106,7 @@ class _LoaderMixin:
             get_logger(PLUGIN, name).error(f'[{name}] 插件目录不存在: {plugin_dir}')
             return
         py_files = self._list_py_files(plugin_dir)
+        py_files = [p for p in py_files if f'{name}/{os.path.basename(p)[:-3]}' not in self._disabled_plugins]
         if not py_files:
             get_logger(PLUGIN, name).error(f'[{name}] 目录中无可用 .py 文件: {plugin_dir}')
             return
@@ -154,6 +165,10 @@ class _LoaderMixin:
             start = time.time()
             module = self._import_plugin(name, plugin_dir, entry)
             h, lo, ul, ic = _collect_pending()
+            # 过滤禁用子模块
+            prefix = f'plugins.{name}.'
+            h = [x for x in h if _sub_key(x['func'], name, prefix) not in self._disabled_plugins]
+            ic = [x for x in ic if _sub_key(x['func'], name, prefix) not in self._disabled_plugins]
             plugin = _finalize_plugin(
                 name, plugin_dir, module, plugin_ctx, h, lo, ul, ic, start, is_large=True
             )
